@@ -1,0 +1,63 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+  name: bq-to-alloy-service
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen1
+        run.googleapis.com/vpc-access-connector: "projects/${PROJECT_ID}/locations/${REGION}/connectors/${CONNECTOR_NAME}"
+        run.googleapis.com/vpc-access-egress: all-traffic
+    spec:
+      serviceAccountName: bq-to-alloy-sa
+      containers:
+        - name: main-app
+          image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/${IMAGE_NAME}/${IMAGE_NAME}
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              value: projects/nodal-cogency-451902-e0/locations/us-east1/clusters/my-cluster/instances/my-cluster-primary
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: alloydb-db-name
+                  key: latest
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: alloydb-db-user
+                  key: latest
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: alloydb-db-password
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            failureThreshold: 30
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
